@@ -8,9 +8,10 @@ body:
     attributes:
       label: 날짜
       description: YYYY-MM-DD
-      placeholder: 2025-09-14
+      placeholder: "2025-09-14"   # ✅ 따옴표 필수
     validations:
       required: true
+
   - type: dropdown
     id: type
     attributes:
@@ -21,24 +22,27 @@ body:
       default: 0
     validations:
       required: true
+
   - type: input
     id: name
     attributes:
       label: 이름
-      placeholder: 예) 김OO
+      placeholder: "예) 김OO"
     validations:
       required: true
+
   - type: input
     id: amount
     attributes:
       label: 금액 ($)
-      placeholder: 10
+      placeholder: "10"
     validations:
       required: true
+
   - type: textarea
     id: description
     attributes:
       label: 설명(선택)
-      placeholder: 예) 9월 후원금, 간식비
+      placeholder: "예) 9월 후원금, 간식비"
     validations:
       required: false

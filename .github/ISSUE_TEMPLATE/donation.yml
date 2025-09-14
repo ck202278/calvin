@@ -1,0 +1,44 @@
+name: 후원/지출 입력
+description: 이달 후원이나 지출을 기록합니다.
+title: "[거래] {{name}} - {{amount}} - {{type}}"
+labels: ["donation"]
+body:
+  - type: input
+    id: date
+    attributes:
+      label: 날짜
+      description: YYYY-MM-DD
+      placeholder: 2025-09-14
+    validations:
+      required: true
+  - type: dropdown
+    id: type
+    attributes:
+      label: 구분
+      options:
+        - 후원
+        - 지출
+      default: 0
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: 이름
+      placeholder: 예) 김OO
+    validations:
+      required: true
+  - type: input
+    id: amount
+    attributes:
+      label: 금액 ($)
+      placeholder: 10
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 설명(선택)
+      placeholder: 예) 9월 후원금, 간식비
+    validations:
+      required: false

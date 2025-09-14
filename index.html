@@ -22,6 +22,8 @@
       initUI();
       fetchAndRenderData();
       setDateInputToToday();
+      // 선택: 20초마다 자동 갱신
+      setInterval(fetchAndRenderData, 20000);
     });
 
     function initUI() {
@@ -49,14 +51,9 @@
       nameInput.setAttribute('list','nameList');
       document.body.appendChild(nameDatalist);
 
-      // 날짜 표시
+      // 오늘 날짜 텍스트
       document.getElementById('todayDate').textContent = new Date().toLocaleDateString('ko-KR', {
         year:'numeric', month:'long', day:'numeric'
-      });
-
-      // 폼: 이슈 폼으로 이동
-      document.getElementById('goIssue').addEventListener('click', () => {
-        window.open(ISSUE_FORM_URL, '_blank');
       });
 
       // 타입 선택 시 금액 기본값(후원=10)
@@ -64,6 +61,17 @@
       const amt = document.getElementById('amountInput');
       sel.addEventListener('change', () => {
         amt.value = sel.value === '후원' ? 10 : '';
+      });
+
+      // 입력하기 버튼 → 이슈 폼 열기 + 간단 검증
+      document.getElementById('goIssue').addEventListener('click', (e) => {
+        e.preventDefault();
+        const ok = validateFormFields();
+        if (!ok) return;
+        window.open(ISSUE_FORM_URL, '_blank'); // 새 탭으로 폼 열기
+        const msg = document.getElementById('messageBox');
+        msg.textContent = '새 탭에서 폼을 제출하세요. 제출 후 10~30초 뒤 이 화면을 새로고침하면 반영됩니다.';
+        msg.classList.remove('hidden');
       });
     }
 
@@ -76,6 +84,27 @@
       input.value = `${yyyy}-${mm}-${dd}`;
     }
 
+    function validateFormFields() {
+      const date = document.getElementById('transactionDateInput').value.trim();
+      const name = document.getElementById('nameInput').value.trim();
+      const amount = Number(document.getElementById('amountInput').value);
+      const msg = document.getElementById('messageBox');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        msg.textContent = '날짜를 YYYY-MM-DD 형식으로 입력하세요.';
+        msg.classList.remove('hidden'); return false;
+      }
+      if (!name) {
+        msg.textContent = '이름을 입력하세요.';
+        msg.classList.remove('hidden'); return false;
+      }
+      if (!Number.isFinite(amount) || amount === 0) {
+        msg.textContent = '금액을 정확히 입력하세요.';
+        msg.classList.remove('hidden'); return false;
+      }
+      msg.classList.add('hidden');
+      return { date, name, amount };
+    }
+
     async function fetchAndRenderData() {
       const messageBox = document.getElementById('messageBox');
       try {
@@ -83,7 +112,7 @@
         const json = await res.json();
         allDonationsData = (json.items || []).map(x => ({
           ...x,
-          _date: new Date(x.date.replace(/-/g,'/')) // 안전 변환
+          _date: new Date(String(x.date).replace(/-/g,'/')) // 안전 변환
         }));
         renderData();
         messageBox.classList.add('hidden');
@@ -188,7 +217,7 @@
       </div>
     </header>
 
-    <!-- 입력 섹션 (이슈 폼 이동) -->
+    <!-- 입력 섹션 -->
     <section class="mb-8 p-6 bg-gray-50 rounded-xl shadow-inner border border-gray-200">
       <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4 text-center">후원금/지출 입력</h2>
       <div class="grid gap-4">
@@ -217,7 +246,7 @@
         </div>
 
         <button id="goIssue" class="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
-          GitHub에서 후원/지출 입력하기
+          입력하기
         </button>
         <div id="messageBox" class="mt-2 text-center text-sm font-medium text-green-600 hidden"></div>
         <p class="text-xs text-gray-500 text-center">입력 후 10~30초 내에 아래 표에 반영됩니다 (Actions가 donations.json을 업데이트).</p>
@@ -277,3 +306,4 @@
   </div>
 </body>
 </html>
+

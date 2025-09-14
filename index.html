@@ -1,401 +1,279 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>언약교회 자주만나 선교후원회비</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Inter Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Firebase JS SDK -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, addDoc, serverTimestamp, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>언약교회 자주만나 선교후원회비</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; }
+    .tab-btn.active { border-bottom-color: rgb(79 70 229); color: rgb(79 70 229); }
+  </style>
+  <script>
+    // ====== 설정 ======
+    const DATA_URL = 'https://ck202278.github.io/calvin/data/donations.json';
+    const ISSUE_FORM_URL = 'https://github.com/ck202278/calvin/issues/new?template=donation.yml';
+    const memberNames = ["백귀현","백은옥","깁경호","김연옥","허사모님","이현미","캘빈","스텔라","재키"];
 
-        // Firebase settings and initialization (using external variables)
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    // ====== DOM 참조 ======
+    let allDonationsData = [];
+    document.addEventListener('DOMContentLoaded', () => {
+      initUI();
+      fetchAndRenderData();
+      setDateInputToToday();
+    });
 
-        let db, auth, userId;
-        setLogLevel('Debug');
-
-        // Function to track user authentication status
-        async function setupAuth() {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-
-            return new Promise((resolve) => {
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                    } else {
-                        try {
-                           // Try to use the custom token if available
-                            if (typeof __initial_auth_token !== 'undefined') {
-                                const userCredential = await signInWithCustomToken(auth, __initial_auth_token);
-                                userId = userCredential.user.uid;
-                            } else {
-                                // Fallback to anonymous sign-in if no custom token
-                                const userCredential = await signInAnonymously(auth);
-                                userId = userCredential.user.uid;
-                            }
-                        } catch (error) {
-                            console.error("Error signing in:", error);
-                            userId = 'anonymous'; // Fallback user ID
-                        }
-                    }
-                    console.log("Firebase Auth Ready. User ID:", userId);
-                    resolve();
-                });
-            });
-        }
-        
-        const memberNames = ["백귀현", "백은옥", "깁경호", "김연옥", "허사모님", "이현미", "캘빈", "스텔라", "재키"];
-        const transactionTypeSelect = document.getElementById('transactionTypeSelect');
-        const nameInput = document.getElementById('nameInput');
-        const amountInput = document.getElementById('amountInput');
-        const descriptionInput = document.getElementById('descriptionInput');
-        const transactionForm = document.getElementById('transactionForm');
-        const currentMonthTotalElement = document.getElementById('currentMonthTotal');
-        const totalAmountElement = document.getElementById('totalAmount');
-        const allDonationsTableBody = document.getElementById('allDonationsTableBody');
-        const individualDonationsTableBody = document.getElementById('individualDonationsTableBody');
-        const nonPayersList = document.getElementById('nonPayersList');
-        const tabs = document.querySelectorAll('.tab-btn');
-        const tabContents = document.querySelectorAll('.tab-content');
-        const messageBox = document.getElementById('messageBox');
-        const todayDateElement = document.getElementById('todayDate');
-        const transactionDateInput = document.getElementById('transactionDateInput');
-
-        let allDonationsData = [];
-
-        // Function to create a dropdown menu
-        function createNameDropdown() {
-            const nameDatalist = document.createElement('datalist');
-            nameDatalist.id = 'nameList';
-            memberNames.forEach(name => {
-                const option = document.createElement('option');
-                option.value = name;
-                nameDatalist.appendChild(option);
-            });
-            nameInput.setAttribute('list', 'nameList');
-            document.body.appendChild(nameDatalist);
-        }
-
-        // Reset amount on form reset
-        transactionTypeSelect.addEventListener('change', () => {
-            if (transactionTypeSelect.value === '후원') {
-                amountInput.value = 10;
-            } else {
-                amountInput.value = '';
-            }
+    function initUI() {
+      // 탭
+      const tabs = document.querySelectorAll('.tab-btn');
+      const tabContents = document.querySelectorAll('.tab-content');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tabContents.forEach(c => c.classList.add('hidden'));
+          tab.classList.add('active');
+          document.getElementById(tab.dataset.tab).classList.remove('hidden');
         });
+      });
 
-        // Tab switching functionality
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.forEach(item => item.classList.remove('active'));
-                tab.classList.add('active');
-                tabContents.forEach(content => content.classList.add('hidden'));
-                const targetId = tab.getAttribute('data-tab');
-                document.getElementById(targetId).classList.remove('hidden');
-            });
+      // datalist
+      const nameInput = document.getElementById('nameInput');
+      const nameDatalist = document.createElement('datalist');
+      nameDatalist.id = 'nameList';
+      memberNames.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        nameDatalist.appendChild(opt);
+      });
+      nameInput.setAttribute('list','nameList');
+      document.body.appendChild(nameDatalist);
+
+      // 날짜 표시
+      document.getElementById('todayDate').textContent = new Date().toLocaleDateString('ko-KR', {
+        year:'numeric', month:'long', day:'numeric'
+      });
+
+      // 폼: 이슈 폼으로 이동
+      document.getElementById('goIssue').addEventListener('click', () => {
+        window.open(ISSUE_FORM_URL, '_blank');
+      });
+
+      // 타입 선택 시 금액 기본값(후원=10)
+      const sel = document.getElementById('transactionTypeSelect');
+      const amt = document.getElementById('amountInput');
+      sel.addEventListener('change', () => {
+        amt.value = sel.value === '후원' ? 10 : '';
+      });
+    }
+
+    function setDateInputToToday() {
+      const input = document.getElementById('transactionDateInput');
+      const t = new Date();
+      const yyyy = t.getFullYear();
+      const mm = String(t.getMonth()+1).padStart(2,'0');
+      const dd = String(t.getDate()).padStart(2,'0');
+      input.value = `${yyyy}-${mm}-${dd}`;
+    }
+
+    async function fetchAndRenderData() {
+      const messageBox = document.getElementById('messageBox');
+      try {
+        const res = await fetch(DATA_URL + '?_=' + Date.now()); // 캐시 방지
+        const json = await res.json();
+        allDonationsData = (json.items || []).map(x => ({
+          ...x,
+          _date: new Date(x.date.replace(/-/g,'/')) // 안전 변환
+        }));
+        renderData();
+        messageBox.classList.add('hidden');
+      } catch (e) {
+        console.error(e);
+        messageBox.textContent = "데이터를 불러오지 못했습니다.";
+        messageBox.classList.remove('hidden');
+      }
+    }
+
+    function renderData() {
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+
+      let currentMonthTotal = 0;
+      const totalMap = {};
+      const monthly = [];
+      const payersThisMonth = new Set();
+
+      for (const d of allDonationsData) {
+        const dt = d._date;
+        if (!isNaN(dt)) {
+          if (dt.getMonth() === currentMonth && dt.getFullYear() === currentYear) {
+            currentMonthTotal += d.amount;
+            monthly.push(d);
+            if (d.type === '후원') payersThisMonth.add(d.name);
+          }
+        }
+        totalMap[d.name] = (totalMap[d.name] || 0) + d.amount;
+      }
+
+      // 이달 내역
+      const tb1 = document.getElementById('allDonationsTableBody');
+      tb1.innerHTML = '';
+      monthly.sort((a,b) => b._date - a._date).forEach(doc => {
+        const tr = document.createElement('tr');
+        const amountClass = doc.amount < 0 ? 'text-red-500 font-bold' : 'text-green-600 font-bold';
+        tr.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${doc._date.toLocaleDateString()}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${doc.name}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm ${amountClass}">${doc.amount.toLocaleString()}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.type}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.description || ''}</td>
+        `;
+        tb1.appendChild(tr);
+      });
+
+      // 개인별 합계
+      const tb2 = document.getElementById('individualDonationsTableBody');
+      tb2.innerHTML = '';
+      Object.entries(totalMap).sort((a,b)=>b[1]-a[1]).forEach(([name,total])=>{
+        const tr = document.createElement('tr');
+        const cls = total < 0 ? 'text-red-500' : 'text-green-600';
+        tr.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${name}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm ${cls}">${total.toLocaleString()}</td>
+        `;
+        tb2.appendChild(tr);
+      });
+
+      // 미납자
+      const ul = document.getElementById('nonPayersList');
+      ul.innerHTML = '';
+      const non = memberNames.filter(n => !payersThisMonth.has(n));
+      if (non.length) {
+        non.forEach(n=>{
+          const li = document.createElement('li');
+          li.textContent = n;
+          li.className = "text-red-700 font-medium";
+          ul.appendChild(li);
         });
+      } else {
+        const li = document.createElement('li');
+        li.textContent = "모든 분들이 후원하셨습니다. 감사합니다!";
+        li.className = "text-green-700 font-medium";
+        ul.appendChild(li);
+      }
 
-        // Message display function
-        function showMessage(message) {
-            messageBox.textContent = message;
-            messageBox.classList.remove('hidden');
-            setTimeout(() => {
-                messageBox.classList.add('hidden');
-            }, 3000);
-        }
-        
-        // Function to set the date input to today's date
-        function setDateInputToToday() {
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0');
-            const dd = String(today.getDate()).padStart(2, '0');
-            transactionDateInput.value = `${yyyy}-${mm}-${dd}`;
-        }
-
-        // Handle donation/expense form submission
-        transactionForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            if (!db) {
-                showMessage("Database is not ready. Please try again.");
-                return;
-            }
-
-            const name = nameInput.value.trim();
-            const amount = parseFloat(amountInput.value);
-            const type = transactionTypeSelect.value;
-            const description = descriptionInput.value.trim();
-            const transactionDate = transactionDateInput.value;
-
-            if (!name) {
-                showMessage("이름을 입력하거나 선택해주세요.");
-                return;
-            }
-            if (isNaN(amount) || amount === 0) {
-                showMessage("금액을 정확히 입력해주세요.");
-                return;
-            }
-
-            const data = {
-                name: name,
-                amount: type === '후원' ? amount : -Math.abs(amount),
-                type: type,
-                description: description,
-                timestamp: new Date(transactionDate), // Use the selected date
-            };
-
-            try {
-                await addDoc(collection(db, `artifacts/${appId}/public/data/donations`), data);
-                transactionForm.reset();
-                nameInput.value = '';
-                amountInput.value = 10;
-                showMessage("거래가 성공적으로 입력되었습니다!");
-                
-                // After successful submission, reset the date input to today's date
-                setDateInputToToday();
-            } catch (e) {
-                console.error("Error adding document: ", e);
-                showMessage("거래 입력에 실패했습니다. 다시 시도해주세요.");
-            }
-        });
-
-        // Real-time data synchronization and table update
-        async function fetchAndRenderData() {
-            await setupAuth();
-            if (!db) return;
-
-            const donationsColRef = collection(db, `artifacts/${appId}/public/data/donations`);
-            const q = query(donationsColRef, orderBy("timestamp", "desc"));
-            
-            onSnapshot(q, (snapshot) => {
-                allDonationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                renderData();
-            }, (error) => {
-                console.error("Error fetching data: ", error);
-                showMessage("데이터를 불러오는 데 실패했습니다. 다시 시도해주세요.");
-            });
-        }
-
-        function renderData() {
-            const today = new Date();
-            const currentMonth = today.getMonth();
-            const currentYear = today.getFullYear();
-            
-            // Calculate monthly data and cumulative total
-            let currentMonthTotal = 0;
-            const totalDonationsMap = {};
-            const monthlyDonations = [];
-            const payersThisMonth = new Set();
-            
-            allDonationsData.forEach(doc => {
-                const date = doc.timestamp ? doc.timestamp.toDate() : null;
-                if (date) {
-                    if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
-                        currentMonthTotal += doc.amount;
-                        monthlyDonations.push(doc);
-                        if (doc.type === '후원') {
-                            payersThisMonth.add(doc.name);
-                        }
-                    }
-                    totalDonationsMap[doc.name] = (totalDonationsMap[doc.name] || 0) + doc.amount;
-                }
-            });
-
-            // Update all donations table
-            allDonationsTableBody.innerHTML = '';
-            monthlyDonations.forEach(doc => {
-                const row = document.createElement('tr');
-                const date = doc.timestamp ? doc.timestamp.toDate() : new Date();
-                const amountClass = doc.amount < 0 ? 'text-red-500 font-bold' : 'text-green-600 font-bold';
-                
-                row.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${date.toLocaleDateString()}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${doc.name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm ${amountClass}">${doc.amount.toLocaleString()}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.type}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.description}</td>
-                `;
-                allDonationsTableBody.appendChild(row);
-            });
-
-            // Update individual cumulative status table
-            individualDonationsTableBody.innerHTML = '';
-            const individualTotals = Object.entries(totalDonationsMap).sort((a, b) => b[1] - a[1]);
-            individualTotals.forEach(([name, total]) => {
-                const row = document.createElement('tr');
-                const totalClass = total < 0 ? 'text-red-500' : 'text-green-600';
-                row.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm ${totalClass}">${total.toLocaleString()}</td>
-                `;
-                individualDonationsTableBody.appendChild(row);
-            });
-
-            // Update non-payers list
-            nonPayersList.innerHTML = '';
-            const nonPayers = memberNames.filter(name => !payersThisMonth.has(name));
-            if (nonPayers.length > 0) {
-                nonPayers.forEach(name => {
-                    const li = document.createElement('li');
-                    li.textContent = name;
-                    li.className = "text-red-700 font-medium";
-                    nonPayersList.appendChild(li);
-                });
-            } else {
-                const li = document.createElement('li');
-                li.textContent = "모든 분들이 후원하셨습니다. 감사합니다!";
-                li.className = "text-green-700 font-medium";
-                nonPayersList.appendChild(li);
-            }
-            
-            // Update totals for the month and cumulative
-            totalAmountElement.textContent = Object.values(totalDonationsMap).reduce((sum, amount) => sum + amount, 0).toLocaleString();
-            currentMonthTotalElement.textContent = currentMonthTotal.toLocaleString();
-        }
-
-        // Initialization
-        document.addEventListener('DOMContentLoaded', () => {
-            todayDateElement.textContent = new Date().toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-            createNameDropdown();
-            fetchAndRenderData();
-
-            // Set default date to today's date on initial load
-            setDateInputToToday();
-        });
-
-    </script>
+      // 합계
+      document.getElementById('totalAmount').textContent =
+        Object.values(totalMap).reduce((s,v)=>s+v,0).toLocaleString();
+      document.getElementById('currentMonthTotal').textContent =
+        currentMonthTotal.toLocaleString();
+    }
+  </script>
 </head>
 <body class="bg-gray-100 font-sans p-4 sm:p-6 md:p-10">
+  <div class="max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-200">
+    <header class="text-center mb-8">
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-800 tracking-tight mb-2">언약교회 자주만나 선교후원회비</h1>
+      <p class="text-gray-500 font-medium text-sm sm:text-base mb-2">오늘 날짜: <span id="todayDate" class="text-gray-600 font-semibold"></span></p>
+      <div class="mt-4 flex flex-col sm:flex-row justify-center items-center gap-4">
+        <div class="text-center">
+          <p class="text-gray-500 font-medium text-sm">총 누적 금액</p>
+          <p id="totalAmount" class="text-4xl sm:text-5xl font-bold text-gray-900 mt-1">0</p>
+        </div>
+        <div class="text-center">
+          <p class="text-gray-500 font-medium text-sm">이달의 금액</p>
+          <p id="currentMonthTotal" class="text-4xl sm:text-5xl font-bold text-indigo-600 mt-1">0</p>
+        </div>
+      </div>
+    </header>
 
-    <!-- Container -->
-    <div class="max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-200">
-
-        <!-- Header -->
-        <header class="text-center mb-8">
-            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-800 tracking-tight mb-2">언약교회 자주만나 선교후원회비</h1>
-            <p class="text-gray-500 font-medium text-sm sm:text-base mb-2">오늘 날짜: <span id="todayDate" class="text-gray-600 font-semibold"></span></p>
-            <div class="mt-4 flex flex-col sm:flex-row justify-center items-center gap-4">
-                <div class="text-center">
-                    <p class="text-gray-500 font-medium text-sm">총 누적 금액</p>
-                    <p id="totalAmount" class="text-4xl sm:text-5xl font-bold text-gray-900 mt-1">0</p>
-                </div>
-                <div class="text-center">
-                    <p class="text-gray-500 font-medium text-sm">이달의 금액</p>
-                    <p id="currentMonthTotal" class="text-4xl sm:text-5xl font-bold text-indigo-600 mt-1">0</p>
-                </div>
-            </div>
-        </header>
-
-        <!-- Transaction Input Section -->
-        <section class="mb-8 p-6 bg-gray-50 rounded-xl shadow-inner border border-gray-200">
-            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4 text-center">후원금/지출 입력</h2>
-            <form id="transactionForm" class="space-y-4">
-                 <div>
-                    <label for="transactionDateInput" class="block text-sm font-medium text-gray-700">날짜</label>
-                    <input type="date" id="transactionDateInput" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                </div>
-                <div>
-                    <label for="transactionTypeSelect" class="block text-sm font-medium text-gray-700">구분</label>
-                    <select id="transactionTypeSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                        <option value="후원">후원</option>
-                        <option value="지출">지출</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="nameInput" class="block text-sm font-medium text-gray-700">이름</label>
-                    <input type="text" id="nameInput" placeholder="이름을 입력하거나 선택하세요" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                </div>
-                <div>
-                    <label for="amountInput" class="block text-sm font-medium text-gray-700">금액 ($)</label>
-                    <input type="number" id="amountInput" placeholder="금액" value="10" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                </div>
-                <div>
-                    <label for="descriptionInput" class="block text-sm font-medium text-gray-700">설명 (선택사항)</label>
-                    <input type="text" id="descriptionInput" placeholder="예: 8월 후원금, 간식비" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                </div>
-                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
-                    입력하기
-                </button>
-                <div id="messageBox" class="mt-2 text-center text-sm font-medium text-green-600 hidden"></div>
-            </form>
-        </section>
-
-        <!-- Tabs for different views -->
-        <div class="flex flex-wrap justify-center sm:justify-start -mb-px">
-            <button class="tab-btn active inline-block py-2 px-4 text-gray-600 hover:text-indigo-600 font-medium rounded-t-lg border-b-2 border-indigo-500 transition-all duration-300" data-tab="monthlyTab">이달의 후원 내역</button>
-            <button class="tab-btn inline-block py-2 px-4 text-gray-600 hover:text-indigo-600 font-medium rounded-t-lg border-b-2 border-transparent transition-all duration-300" data-tab="individualTab">개인별 누적 현황</button>
-            <button class="tab-btn inline-block py-2 px-4 text-gray-600 hover:text-indigo-600 font-medium rounded-t-lg border-b-2 border-transparent transition-all duration-300" data-tab="nonPayersTab">미납자 명단</button>
+    <!-- 입력 섹션 (이슈 폼 이동) -->
+    <section class="mb-8 p-6 bg-gray-50 rounded-xl shadow-inner border border-gray-200">
+      <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4 text-center">후원금/지출 입력</h2>
+      <div class="grid gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">날짜</label>
+          <input type="date" id="transactionDateInput" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">구분</label>
+          <select id="transactionTypeSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <option value="후원">후원</option>
+            <option value="지출">지출</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">이름</label>
+          <input type="text" id="nameInput" placeholder="이름을 입력하거나 선택하세요" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">금액 ($)</label>
+          <input type="number" id="amountInput" placeholder="금액" value="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">설명 (선택사항)</label>
+          <input type="text" id="descriptionInput" placeholder="예: 8월 후원금, 간식비" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
         </div>
 
-        <!-- Tab Content -->
-        <div id="tab-content-wrapper" class="border-t border-gray-200 pt-4">
-            <div id="monthlyTab" class="tab-content">
-                <div class="bg-gray-50 rounded-xl shadow-inner p-2">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-100">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">날짜</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이름</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">금액</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">구분</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">설명</th>
-                                </tr>
-                            </thead>
-                            <tbody id="allDonationsTableBody" class="bg-white divide-y divide-gray-200">
-                                <!-- Data will be populated here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+        <button id="goIssue" class="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
+          GitHub에서 후원/지출 입력하기
+        </button>
+        <div id="messageBox" class="mt-2 text-center text-sm font-medium text-green-600 hidden"></div>
+        <p class="text-xs text-gray-500 text-center">입력 후 10~30초 내에 아래 표에 반영됩니다 (Actions가 donations.json을 업데이트).</p>
+      </div>
+    </section>
 
-            <div id="individualTab" class="tab-content hidden">
-                <div class="bg-gray-50 rounded-xl shadow-inner p-2">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-100">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">이름</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">누적 후원금</th>
-                                </tr>
-                            </thead>
-                            <tbody id="individualDonationsTableBody" class="bg-white divide-y divide-gray-200">
-                                <!-- Data will be populated here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="nonPayersTab" class="tab-content hidden">
-                <div class="bg-red-50 p-6 rounded-xl border border-red-100">
-                    <h3 class="text-lg font-bold text-red-700 mb-2">이달의 미납자 명단</h3>
-                    <ul id="nonPayersList" class="list-disc list-inside space-y-1">
-                        <!-- Non-payers will be listed here -->
-                    </ul>
-                </div>
-            </div>
-        </div>
-
+    <!-- 탭 -->
+    <div class="flex flex-wrap justify-center sm:justify-start -mb-px">
+      <button class="tab-btn active inline-block py-2 px-4 text-gray-600 hover:text-indigo-600 font-medium rounded-t-lg border-b-2 border-indigo-500 transition-all duration-300" data-tab="monthlyTab">이달의 후원 내역</button>
+      <button class="tab-btn inline-block py-2 px-4 text-gray-600 hover:text-indigo-600 font-medium rounded-t-lg border-b-2 border-transparent transition-all duration-300" data-tab="individualTab">개인별 누적 현황</button>
+      <button class="tab-btn inline-block py-2 px-4 text-gray-600 hover:text-indigo-600 font-medium rounded-t-lg border-b-2 border-transparent transition-all duration-300" data-tab="nonPayersTab">미납자 명단</button>
     </div>
 
+    <div id="tab-content-wrapper" class="border-t border-gray-200 pt-4">
+      <div id="monthlyTab" class="tab-content">
+        <div class="bg-gray-50 rounded-xl shadow-inner p-2">
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">날짜</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이름</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">금액</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">구분</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">설명</th>
+                </tr>
+              </thead>
+              <tbody id="allDonationsTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="individualTab" class="tab-content hidden">
+        <div class="bg-gray-50 rounded-xl shadow-inner p-2">
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">이름</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">누적 후원금</th>
+                </tr>
+              </thead>
+              <tbody id="individualDonationsTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="nonPayersTab" class="tab-content hidden">
+        <div class="bg-red-50 p-6 rounded-xl border border-red-100">
+          <h3 class="text-lg font-bold text-red-700 mb-2">이달의 미납자 명단</h3>
+          <ul id="nonPayersList" class="list-disc list-inside space-y-1"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

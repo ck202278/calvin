@@ -1,0 +1,75 @@
+name: Build donations.json
+
+on:
+  issues:
+    types: [opened, edited, labeled, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate donations.json from issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const dir = 'data';
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+            // "donation" 라벨이 붙은 모든 이슈 수집
+            const donations = [];
+            let page = 1;
+            while (true) {
+              const res = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: 'donation',
+                state: 'all',
+                per_page: 100,
+                page
+              });
+              if (!res.data.length) break;
+
+              for (const issue of res.data) {
+                const body = issue.body || '';
+                const pick = (h) => {
+                  const re = new RegExp(`### ${h}\\s*\\n([\\s\\S]*?)(\\n###|$)`);
+                  const m = body.match(re);
+                  return m ? m[1].trim() : '';
+                };
+                const date = pick('날짜');
+                const type = pick('구분');
+                const name = pick('이름');
+                const amt  = pick('금액 \\(\\$\\)');
+                const desc = pick('설명\\(선택\\)');
+
+                const amount = Number(String(amt).replace(/[^0-9.-]/g, '')) || 0;
+                if (!date || !name || !type) continue;
+
+                donations.push({
+                  id: issue.number,
+                  date,
+                  type,
+                  name,
+                  amount: type === '지출' ? -Math.abs(amount) : Math.abs(amount),
+                  description: desc || '',
+                  created_at: issue.created_at
+                });
+              }
+              page += 1;
+            }
+
+            fs.writeFileSync(`${dir}/donations.json`, JSON.stringify({ items: donations }, null, 2), 'utf8');
+            core.info(`Wrote ${donations.length} records`);
+      - name: Commit & push
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "data/donations.json"
+          message: "Build donations.json"

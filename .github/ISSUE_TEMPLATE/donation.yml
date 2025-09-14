@@ -1,6 +1,7 @@
 name: 후원/지출 입력
 description: 이달 후원이나 지출을 기록합니다.
-title: "[거래] {{name}} - {{amount}} - {{type}}"
+title: "후원/지출 기록"
+
 labels: ["donation"]
 body:
   - type: input
